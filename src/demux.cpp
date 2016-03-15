@@ -202,26 +202,39 @@ int demux(const char *in_filename, const char *out_filename_v,
 			// printf("frame duration is %d\n", frame->pkt_duration);
 
 			// encode
-			AVCodecID h264 = AV_CODEC_ID_H264;
-			encoder = avcodec_find_encoder(h264);
+			encoder = avcodec_find_encoder(AV_CODEC_ID_H264);
 
 			// avcodec_copy_context(enc_ctx, dec_ctx);
 			enc_ctx = avcodec_alloc_context3(encoder);
-            if (!encoder) {
-                av_log(NULL, AV_LOG_FATAL, "Necessary encoder not found\n");
-                return AVERROR_INVALIDDATA;
-            }
-			if (dec_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
-				enc_ctx->height = dec_ctx->height;
-				enc_ctx->width = dec_ctx->width;
-				enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
-				/* take first format from list of supported formats */
-				enc_ctx->pix_fmt = encoder->pix_fmts[0];
-				/* video time_base can be set to whatever is handy and supported by encoder */
-				enc_ctx->time_base = dec_ctx->time_base;
+			if (!encoder) {
+				av_log(NULL, AV_LOG_FATAL, "Necessary encoder not found\n");
+				return AVERROR_INVALIDDATA;
 			}
 
-		    av_opt_set(enc_ctx->priv_data, "preset", "slow", 0);
+			enc_ctx->height = dec_ctx->height;
+			enc_ctx->width = dec_ctx->width;
+			enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
+			enc_ctx->pix_fmt = encoder->pix_fmts[0];
+			enc_ctx->time_base = dec_ctx->time_base;
+			//enc_ctx->time_base.num = 1;
+			//enc_ctx->time_base.den = 25;
+			//H264的必备选项，没有就会错
+			enc_ctx->me_range = 16;
+			enc_ctx->max_qdiff = 4;
+			enc_ctx->qmin = 10;
+			enc_ctx->qmax = 51;
+			enc_ctx->qcompress = 0.6;
+			enc_ctx->refs = 3;
+			enc_ctx->bit_rate = 1500;
+
+			ret = avcodec_open2(enc_ctx, encoder, NULL);
+			if (ret < 0) {
+				av_log(NULL, AV_LOG_ERROR,
+						"Cannot open video encoder for stream #%u\n", i);
+				return ret;
+			}
+
+			av_opt_set(enc_ctx->priv_data, "preset", "slow", 0);
 
 			// AVOutputFormat *formatOut = av_guess_format(NULL, out_filename_v, NULL);
 
@@ -230,16 +243,13 @@ int demux(const char *in_filename, const char *out_filename_v,
 			av_init_packet(&enc_pkt);
 			ret = avcodec_open2(enc_ctx, encoder, NULL);
 			if (ret < 0) {
-				av_log(NULL, AV_LOG_ERROR, "Failed to open encoder for stream #%u\n", i);
+				av_log(NULL, AV_LOG_ERROR,
+						"Failed to open encoder for stream #%u\n", i);
 				return ret;
 			}
-		    frame->format = enc_ctx->pix_fmt;
-		    frame->width  = enc_ctx->width;
-		    frame->height = enc_ctx->height;
 			ret = avcodec_encode_video2(enc_ctx, &enc_pkt, frame, &got_frame);
 
 			printf("demo is %s\n", "hello");
-
 
 			av_frame_free(&frame);
 			avcodec_close(enc_ctx);
@@ -254,16 +264,16 @@ int demux(const char *in_filename, const char *out_filename_v,
 		}
 
 		// Convert PTS/DTS
-		enc_pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base,
+		enc_pkt.pts = av_rescale_q_rnd(enc_pkt.pts, in_stream->time_base,
 				out_stream->time_base,
 				(AVRounding) (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-		enc_pkt.dts = av_rescale_q_rnd(pkt.dts, in_stream->time_base,
+		enc_pkt.dts = av_rescale_q_rnd(enc_pkt.dts, in_stream->time_base,
 				out_stream->time_base,
 				(AVRounding) (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-		enc_pkt.duration = av_rescale_q(pkt.duration, in_stream->time_base,
+		enc_pkt.duration = av_rescale_q(enc_pkt.duration, in_stream->time_base,
 				out_stream->time_base);
-		enc_pkt.pos = -1;
-		enc_pkt.stream_index = 0;
+		// enc_pkt.pos = -1;
+		enc_pkt.stream_index = video_index;
 
 		if (av_interleaved_write_frame(ofmt_ctx, &enc_pkt) < 0) {
 			printf("Error muxing packet\n");
