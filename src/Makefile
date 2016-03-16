@@ -16,3 +16,6 @@ transcode:
 				gcc -g -Wall transcode.c main_transcode.c -o transcode -I/home/yy/dev/c/multimedia/ffmpeg-learning/ffmpegbuild/include -L/home/yy/dev/c/multimedia/ffmpeg-learning/ffmpegbuild/lib -lavformat -lavutil -lavcodec -lavfilter
 				
 				
+demux_android:
+				gcc -g -Wall demux_android.c main_demux_android.c -o demux -I/home/yy/dev/c/multimedia/ffmpeg-learning/ffmpegbuild/include -L/home/yy/dev/c/multimedia/ffmpeg-learning/ffmpegbuild/lib -lavformat -lavutil -lavcodec
+				
